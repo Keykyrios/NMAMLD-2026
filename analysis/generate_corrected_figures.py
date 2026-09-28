@@ -54,7 +54,9 @@ def generate_all_figures():
     ax.plot([min_val, max_val], [min_val, max_val], 'k--', lw=2, label="1:1 Perfect Prediction")
     ax.set_xlabel("True Grain Damage Index (Atomistic Ground Truth)", fontsize=11, fontweight="bold")
     ax.set_ylabel("Microstructure GAT Predicted Damage", fontsize=11, fontweight="bold")
-    ax.set_title("Held-Out Test Set Prediction Accuracy (R² = 0.559)", fontsize=12, fontweight="bold")
+    metrics_df = pd.read_csv("data/model_metrics.csv")
+    r2_gat = metrics_df["Microstructure_GAT_Test_R2_mean"].iloc[0]
+    ax.set_title(f"Held-Out Test Set Prediction Accuracy (R² = {r2_gat:.3f})", fontsize=12, fontweight="bold")
     ax.legend(loc="upper left")
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
@@ -78,14 +80,16 @@ def generate_all_figures():
     plt.savefig("plots/fig4_gcn_vs_gat_test_performance.png", dpi=300)
     plt.close()
 
-    # 5. Attention Distribution vs Interface Damage Contrast
+    # 5. Attention Distribution vs Misorientation Angle
     att_df = pd.read_csv("data/learned_attention_weights.csv")
     test_att = att_df[att_df["split"] == "test"]
     fig, ax = plt.subplots(figsize=(6.5, 5))
-    ax.scatter(test_att["interface_damage_diff"], test_att["attention_weight"], color="#27ae60", alpha=0.7, edgecolors="black")
-    ax.set_xlabel("Interface Damage Contrast ΔD_ij", fontsize=11, fontweight="bold")
+    ax.scatter(test_att["misorientation_deg"], test_att["attention_weight"], color="#27ae60", alpha=0.7, edgecolors="black")
+    ax.set_xlabel("Misorientation Angle θ [deg]", fontsize=11, fontweight="bold")
     ax.set_ylabel("GAT Learned Attention Weight α_ij", fontsize=11, fontweight="bold")
-    ax.set_title("Learned Attention vs. Physical Interface Damage (r = 0.424, p < 1e-15)", fontsize=11, fontweight="bold")
+    from scipy.stats import spearmanr
+    rho, pval = spearmanr(test_att["misorientation_deg"], test_att["attention_weight"])
+    ax.set_title(f"Learned Attention vs. Boundary Misorientation (ρ = {rho:.3f})", fontsize=11, fontweight="bold")
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.savefig("plots/fig5_attention_vs_damage.png", dpi=300)
@@ -120,7 +124,7 @@ def generate_all_figures():
         "B) 3D Microstructure Graph Representation",
         "C) Held-Out Test Set Damage Prediction Accuracy",
         "D) Held-Out Test Error (Baseline GCN vs GAT)",
-        "E) GAT Attention vs. Physical Interface Damage",
+        "E) GAT Attention vs. Boundary Misorientation",
         "F) Nonlocal Kernel Sensitivity Analysis (γ)"
     ]
 
@@ -131,7 +135,7 @@ def generate_all_figures():
         axes_m[row, col].set_title(sub_titles[idx], fontsize=13, fontweight="bold", pad=8)
         axes_m[row, col].axis("off")
 
-    plt.suptitle("Microstructure-Informed Dirichlet Forms for Nonlocal Polycrystalline Fracture\nMultiscale Computational Proof-of-Concept Workflow (Audit Verified)", fontsize=15, fontweight="bold", y=0.99)
+    plt.suptitle("Microstructure-Informed Dirichlet Forms for Nonlocal Polycrystalline Fracture\nMultiscale Computational Proof-of-Concept Workflow", fontsize=15, fontweight="bold", y=0.99)
     plt.tight_layout()
     plt.savefig("plots/master_paper_figure.png", dpi=300)
     plt.close()

@@ -23,6 +23,8 @@ def run_attention_and_kernel_analysis():
     node_std  = np.array(scalers["node_scaler_std"])
     edge_mean = np.array(scalers["edge_scaler_mean"])
     edge_std  = np.array(scalers["edge_scaler_std"])
+    target_mean = float(scalers["target_mean"])
+    target_std  = float(scalers["target_std"])
 
     train_ids = [1, 2, 3, 4, 5, 6, 7]
     val_ids   = [8]
@@ -30,15 +32,15 @@ def run_attention_and_kernel_analysis():
 
     # 2. Re-instantiate and Train Best GAT Model
     torch.manual_seed(42)
-    # in_channels=7: 6 Euler sin/cos + taylor_factor
+    # in_channels=9: 6 Euler sin/cos + taylor_factor + atom_count + node_degree
     # edge_dim=4: distance, sin(misorientation), cos(misorientation), GB energy
-    gat = HybridMPNN_GAT(in_channels=7, hidden_channels=64, edge_dim=4, out_channels=1, heads=4).to(device)
+    gat = HybridMPNN_GAT(in_channels=9, hidden_channels=64, edge_dim=4, out_channels=1, heads=4).to(device)
     optimizer = torch.optim.Adam(gat.parameters(), lr=0.003, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=30, factor=0.5, min_lr=1e-5)
     criterion = torch.nn.MSELoss()
 
-    train_graphs = [build_pyg_graph(sid, nodes_df, edges_df, node_mean, node_std, edge_mean, edge_std).to(device) for sid in train_ids]
-    val_graphs   = [build_pyg_graph(sid, nodes_df, edges_df, node_mean, node_std, edge_mean, edge_std).to(device) for sid in val_ids]
+    train_graphs = [build_pyg_graph(sid, nodes_df, edges_df, node_mean, node_std, edge_mean, edge_std, target_mean, target_std).to(device) for sid in train_ids]
+    val_graphs   = [build_pyg_graph(sid, nodes_df, edges_df, node_mean, node_std, edge_mean, edge_std, target_mean, target_std).to(device) for sid in val_ids]
 
     import copy
     best_val_loss = float('inf')
@@ -79,7 +81,7 @@ def run_attention_and_kernel_analysis():
     
     def extract_split_attention(sample_ids, split_name):
         for sid in sample_ids:
-            g = build_pyg_graph(sid, nodes_df, edges_df, node_mean, node_std, edge_mean, edge_std).to(device)
+            g = build_pyg_graph(sid, nodes_df, edges_df, node_mean, node_std, edge_mean, edge_std, target_mean, target_std).to(device)
             with torch.no_grad():
                 out, (edge_index_2, alpha) = gat(g.x, g.edge_index, g.edge_attr, return_attention_weights=True)
 
@@ -124,7 +126,7 @@ def run_attention_and_kernel_analysis():
     
     # Correlation with misorientation angle (pre-loading physical feature)
     r_misorient, p_misorient = pearsonr(test_att["misorientation_deg"], test_att["attention_weight"])
-    rho_misorient, _         = spearmanr(test_att["misorientation_deg"], test_att["attention_weight"])
+    rho_misorient, p_spearman = spearmanr(test_att["misorientation_deg"], test_att["attention_weight"])
     
     # Correlation with GB energy (pre-loading physical feature)
     r_gb_energy, p_gb_energy = pearsonr(test_att["gb_interface_energy_Jm2"], test_att["attention_weight"])
@@ -136,7 +138,7 @@ def run_attention_and_kernel_analysis():
     print("  PHYSICAL ATOMISTIC CORRELATION ANALYSIS ")
     print("  (Correlations with pre-loading features)")
     print("==========================================")
-    print(f"GAT Attention vs Misorientation (Test Set): Pearson r = {r_misorient:.4f} (p = {p_misorient:.4e}), Spearman rho = {rho_misorient:.4f}")
+    print(f"GAT Attention vs Misorientation (Test Set): Pearson r = {r_misorient:.4f}, Spearman rho = {rho_misorient:.4f} (p = {p_spearman:.4e})")
     print(f"GAT Attention vs GB Energy     (Test Set): Pearson r = {r_gb_energy:.4f} (p = {p_gb_energy:.4e})")
     print(f"GAT Attention vs Distance      (Test Set): Pearson r = {r_dist:.4f} (p = {p_dist:.4e})")
 

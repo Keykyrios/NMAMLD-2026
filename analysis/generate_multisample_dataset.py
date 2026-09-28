@@ -283,7 +283,7 @@ run             10000
             "grain_damage_index": float(np.mean(std_pos))
         })
 
-    # --- 4. Extract edge features (NO interface_damage_diff — that would be target leakage) ---
+    # --- 4. Extract edge features ---
     sample_edges = []
     # Scale cutoff distance proportionally to box size
     cutoff_dist = box_len * 0.3  # ~30% of box length
@@ -310,7 +310,6 @@ run             10000
                 gb_energy = calculate_read_shockley_gb_energy(misorient)
                 
                 # EDGE FEATURES: distance, misorientation, GB energy
-                # NO interface_damage_diff — that is derived from the target and would be data leakage
                 sample_edges.append({
                     "sample_id": sample_id,
                     "source_grain": node_grain_ids[i],
@@ -349,7 +348,6 @@ def main():
     print("=" * 60)
     print("  MULTI-SAMPLE DATASET PIPELINE (200-500 GRAINS)")
     print("  With per-sample checkpointing for crash recovery")
-    print("  NO target leakage (interface_damage_diff removed)")
     print("=" * 60)
     
     configs = [
@@ -450,7 +448,7 @@ def main():
     print(f"\nTotal Independent Samples  : {len(df_manifest)}")
     print(f"Total Grain Nodes Extracted : {len(df_nodes)} (Includes Taylor Factor M)")
     print(f"Total Grain Boundary Edges  : {len(df_edges)} (Includes Read-Shockley GB Energy gamma_GB)")
-    print(f"\nNOTE: interface_damage_diff has been REMOVED from edge features to prevent target leakage.")
+
 
 if __name__ == "__main__":
     main()

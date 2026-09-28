@@ -230,7 +230,9 @@ def run_experiment():
     gcn_test_mses, gcn_test_maes, gcn_test_r2s = [], [], []
     gat_test_mses, gat_test_maes, gat_test_r2s = [], [], []
 
-    last_gat_preds, last_gat_targets = [], []
+    best_overall_val_loss = float('inf')
+    best_seed_preds = None
+    best_seed_targets = None
 
     for seed in model_seeds:
         torch.manual_seed(seed)
@@ -350,8 +352,10 @@ def run_experiment():
         if seed == model_seeds[0]:  # Print once
             print(f"    [Log-space R²] GCN: {r2_score(log_true, log_gcn):.4f}, GAT: {r2_score(log_true, log_gat):.4f}")
 
-        last_gat_preds = gat_preds
-        last_gat_targets = true_targets
+        if best_gat_val_loss < best_overall_val_loss:
+            best_overall_val_loss = best_gat_val_loss
+            best_seed_preds = gat_preds.copy()
+            best_seed_targets = true_targets.copy()
 
     test_node_records = []
     node_idx = 0
@@ -360,8 +364,8 @@ def run_experiment():
             test_node_records.append({
                 "sample_id": g.sample_id,
                 "node_idx": i + 1,
-                "true_target": float(last_gat_targets[node_idx]),
-                "gat_predicted_target": float(last_gat_preds[node_idx])
+                "true_target": float(best_seed_targets[node_idx]),
+                "gat_predicted_target": float(best_seed_preds[node_idx])
             })
             node_idx += 1
 
