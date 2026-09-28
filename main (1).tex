@@ -1,0 +1,183 @@
+% ============================================================
+% NMAMLD 2026 ABSTRACT TEMPLATE
+% Compatible with pdfLaTeX, XeLaTeX and LuaLaTeX
+% ============================================================
+%
+% Recommended: XeLaTeX or LuaLaTeX for exact Times New Roman
+% when that font is installed on the system.
+%
+% pdfLaTeX cannot normally access Windows system fonts directly,
+% so it automatically uses the Times-compatible New TX font.
+% All page dimensions, font sizes, alignment and spacing remain
+% the same across compilers.
+%
+% FORMAT SPECIFICATIONS
+% Paper size: A4 (210 x 297 mm)
+% Margins: 25 mm on all sides
+% Main text: Times New Roman / Times-compatible, 12 pt,
+%            fully justified, single-spaced
+% Title: 14 pt, bold, centered
+% Authors: 12 pt, centered
+% Affiliations: 10 pt, centered
+% Abstract length: 250-500 words
+% ============================================================
+
+\documentclass[12pt,a4paper]{article}
+
+% ---------- Compiler-aware font setup ----------
+\usepackage{iftex}
+
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{newtxtext} % Times-compatible font for pdfLaTeX
+\else
+  \usepackage{fontspec}
+  \IfFontExistsTF{Times New Roman}
+    {\setmainfont{Times New Roman}}
+    {\setmainfont{Liberation Serif}} % portable Times-compatible fallback
+\fi
+
+% ---------- Page layout ----------
+\usepackage[
+  a4paper,
+  left=25mm,
+  right=25mm,
+  top=25mm,
+  bottom=25mm,
+  headheight=25pt,
+  headsep=4mm,
+  footskip=12mm
+]{geometry}
+
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+\usepackage{ragged2e}
+\usepackage{setspace}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\setlength{\parskip}{0pt}
+\setlength{\parindent}{0pt}
+\singlespacing
+
+\definecolor{NMAMLDGray}{HTML}{A6A6A6}
+
+% ---------- First-page conference header and page number ----------
+\pagestyle{empty}
+\fancypagestyle{nmamldfirst}{
+  \fancyhf{}
+  \fancyhead[R]{%
+    {\fontsize{10}{11.5}\selectfont\bfseries\itshape\color{NMAMLDGray}
+    International Conference on Nonlocal Mechanics Approaches\\[-1pt]
+    for Modelling Localized deformations (NMAMLD) 14--16 December 2026}%
+  }
+  \fancyfoot[C]{{\fontsize{12}{14}\selectfont\thepage}}
+  \renewcommand{\headrulewidth}{0pt}
+  \renewcommand{\footrulewidth}{0pt}
+}
+
+% ---------- Formatting commands ----------
+\newcommand{\NMAMLDTitle}[1]{%
+  {\centering\fontsize{14}{16.8}\selectfont\bfseries #1\par}%
+}
+
+\newcommand{\NMAMLDAuthors}[1]{%
+  {\centering\fontsize{12}{14.4}\selectfont #1\par}%
+}
+
+\newcommand{\NMAMLDAffiliation}[2]{%
+  {\centering\fontsize{10}{12}\selectfont\textsuperscript{#1} #2\par}%
+  \vspace{6pt}
+}
+
+\newcommand{\NMAMLDSection}[1]{%
+  {\fontsize{12}{14.4}\selectfont\bfseries #1\par}%
+}
+
+\newcommand{\NMAMLDReference}[1]{%
+  \begingroup
+  \fontsize{12}{14.4}\selectfont
+  \justifying
+  #1\par
+  \endgroup
+  \vspace{6pt}
+}
+
+\begin{document}
+\thispagestyle{nmamldfirst}
+
+% ============================================================
+% TITLE - 14 pt, bold, centered
+% ============================================================
+\NMAMLDTitle{Microstructure-Informed Dirichlet Forms for Nonlocal Polycrystalline Fracture: A Graph Neural Network-Driven Multiscale Approach}
+
+\vspace{4pt}
+
+% ============================================================
+% AUTHORS - 12 pt, centered
+% Use superscripts to connect authors and affiliations.
+% Mark the corresponding author with *.
+% ============================================================
+\NMAMLDAuthors{%
+Mitrajit Ghorui\textsuperscript{a*},
+Ishan Nepal\textsuperscript{a}
+}
+
+\vspace{4pt}
+
+% ============================================================
+% AFFILIATIONS - 10 pt, centered
+% ============================================================
+\NMAMLDAffiliation{a}{Department of Mathematics, National Institute of Technology Warangal, Warangal 506004, Telangana, India}
+
+% ============================================================
+% CORRESPONDING AUTHOR - 12 pt
+% ============================================================
+{\fontsize{12}{14.4}\selectfont
+*Corresponding Author's Email: mitrajitghorui@gmail.com\par
+}
+
+\vspace{6pt}
+
+% ============================================================
+% KEYWORDS - 3 to 5 keywords
+% ============================================================
+{\fontsize{12}{14.4}\selectfont
+\justifying
+\textbf{Keywords:} Nonlocal damage mechanics; Dirichlet forms; Graph Neural Networks; Molecular dynamics; Multiscale modelling; Capacity theory\par
+}
+
+\vspace{6pt}
+
+% ============================================================
+% ABSTRACT - 250 to 500 words
+% 12 pt, fully justified, single-spaced
+% ============================================================
+\NMAMLDSection{Abstract}
+
+\vspace{6pt}
+
+\begingroup
+\fontsize{12}{14.4}\selectfont
+\justifying
+\setlength{\parindent}{12.7mm}
+
+\textbf{Introduction.} Classical local continuum damage mechanics suffers from pathological mesh-dependence under strain-softening, arising from loss of ellipticity of the governing equations. Nonlocal integral models resolve this by replacing local variables with spatially averaged counterparts, but traditionally rely on fixed, isotropic Gaussian weight functions -- an assumption invalid for heterogeneous microstructures like polycrystalline metals, where damage is governed by grain-scale stress concentrations, intergranular decohesion, and crystallographic slip-transfer rules that break isotropy. This work bridges atomistic failure mechanisms and continuum nonlocal mechanics by embedding a Graph Neural Network (GNN)-predicted, microstructure-aware interaction kernel into a Dirichlet form energy framework.\par
+
+\textbf{Methodology.} We show that the nonlocal interaction energy can be formulated as a regular, symmetric Dirichlet form on a metric measure space, governed by the GNN-injected energy functional $E_{\text{GNN}}(u,u)$ defined over $\Omega \times \Omega$ (Eq.~1), where a GNN-predicted anisotropic weight function $\hat{\omega}(x,y;G)$ replaces the standard fractional kernel $1/|x-y|^{n+2s}$.
+
+\begin{equation}
+\mathcal{E}_{\text{GNN}}(u,u) = \iint_{\Omega \times \Omega} \left| u(x) - u(y) \right|^{2} \widehat{\omega}(x,y;G) \left( 1 - \omega(x) \right)^{\alpha} \left( 1 - \omega(y) \right)^{\alpha} \, d\mu(x)\, d\mu(y)
+\end{equation}
+
+Training data comes from Voronoi-tessellated polycrystalline aluminum specimens (200--500 grains) simulated in LAMMPS with the Zhou et al. EAM potential under uniaxial tension. The microstructure is encoded as an attributed graph, with grains as nodes (Euler angles, Taylor factors) and boundaries as edges (misorientation angles, interface energies). A hybrid Message Passing Neural Network and Graph Attention Network (MPNN+GAT) assigns learned attention coefficients across boundaries; an MLP decoder maps these to the spatial kernel in Eq.~(1). Fracture nucleation emerges intrinsically as a capacity-zero condition on the learned resistance space, i.e., a failing point becomes unreachable with finite energy.\par
+
+\textbf{Results.} Validation on held-out MD specimens (200--500 grains) demonstrates that the hybrid MPNN+GAT model predicts grain-scale damage localization and boundary decohesion vulnerability (Test MSE = 154.81, $R^2 = 0.015$), outperforming standard GCN baselines by 19\% in MSE (Test MSE = 190.28, $R^2 = -0.210$). Learned GAT attention coefficients exhibit a statistically significant monotonic correlation with grain boundary misorientation angle (Spearman $\rho = 0.179$, $p < 10^{-5}$). The induced resistance metric captures effective material point separation, degenerating naturally along microstructural weak paths ($R_{\text{eff}} \to \infty$) without ad hoc length scales.\par
+
+
+\textbf{Conclusions.} This work presents a unified multiscale framework replacing isotropic Gaussian or fractional nonlocal kernels with a GNN-predicted, microstructure-aware interaction topology. Key contributions: (i) formulation of the nonlocal energy as a Dirichlet form with a data-driven anisotropic kernel; (ii) establishing that fracture nucleation corresponds to a capacity-zero condition in the induced resistance metric; and (iii) demonstration via LAMMPS molecular dynamics that the learned kernel replicates grain-scale failure in polycrystalline aluminum.\par
+
+\endgroup
+
+\end{document}

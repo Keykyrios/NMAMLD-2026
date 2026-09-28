@@ -1,0 +1,44 @@
+# Phase 3: Energy Minimization & NPT Equilibration of Polycrystalline Al
+# Structure: data/polycrystal_Al.data (17,682 atoms, 12 grains)
+# Potential: EAM potential for Al (Al_zhou.eam.alloy)
+
+units           metal
+dimension       3
+boundary        p p p
+atom_style      atomic
+
+# Read polycrystalline geometry
+read_data       ../data/polycrystal_Al.data
+
+# Pair potential for 12 grain atom types
+pair_style      eam/alloy
+pair_coeff      * * ../data/Al_zhou.eam.alloy Al Al Al Al Al Al Al Al Al Al Al Al
+
+# Neighbor list settings
+neighbor        2.0 bin
+neigh_modify    every 1 delay 5 check yes
+
+# Output settings
+thermo          250
+thermo_style    custom step temp pe ke etotal press vol lx ly lz
+
+# STAGE 1: Conjugate Gradient Minimization
+echo            both
+print           "=== STAGE 1: Polycrystal Grain Boundary Minimization ==="
+minimize        1.0e-15 1.0e-15 2000 20000
+
+# STAGE 2: NPT Thermal Equilibration at 300 K, 0 bar
+reset_timestep  0
+timestep        0.001  # 1 fs
+
+dump            1 all custom 1000 equilibrated.lammpstrj id type x y z
+
+velocity        all create 300.0 54321 mom yes rot yes dist gaussian
+fix             npt_eq all npt temp 300.0 300.0 0.1 iso 0.0 0.0 1.0
+
+print           "=== STAGE 2: NPT Thermal Equilibration (5000 steps, 5 ps) ==="
+run             5000
+
+# Save checkpoint restart file
+write_restart   equilibrated_polycrystal.restart
+print           "=== Phase 3 Equilibration Complete: Saved equilibrated_polycrystal.restart ==="

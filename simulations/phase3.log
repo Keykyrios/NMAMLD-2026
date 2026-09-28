@@ -1,0 +1,172 @@
+LAMMPS (4 Jul 2026)
+OMP_NUM_THREADS environment is not set. Defaulting to 1 thread.
+  using 1 OpenMP thread(s) per MPI task
+package omp 8
+set 8 OpenMP thread(s) per MPI task
+using multi-threaded neighbor list subroutines
+# Phase 3: Energy Minimization & NPT Equilibration of Polycrystalline Al
+# Structure: data/polycrystal_Al.data (17,682 atoms, 12 grains)
+# Potential: EAM potential for Al (Al_zhou.eam.alloy)
+
+units           metal
+dimension       3
+boundary        p p p
+atom_style      atomic
+
+# Read polycrystalline geometry
+read_data       ../data/polycrystal_Al.data
+Reading data file ...
+  orthogonal box = (0 0 0) to (80 80 80)
+  1 by 1 by 1 MPI processor grid
+  reading atoms ...
+  17682 atoms
+  read_data CPU = 0.180 seconds
+
+# Pair potential for 12 grain atom types
+pair_style      eam/alloy
+pair_coeff      * * ../data/Al_zhou.eam.alloy Al Al Al Al Al Al Al Al Al Al Al Al
+Reading eam/alloy potential file ../data/Al_zhou.eam.alloy with DATE: 2007-10-12
+
+# Neighbor list settings
+neighbor        2.0 bin
+neigh_modify    every 1 delay 5 check yes
+
+# Output settings
+thermo          250
+thermo_style    custom step temp pe ke etotal press vol lx ly lz
+
+# STAGE 1: Conjugate Gradient Minimization
+echo            both
+print           "=== STAGE 1: Polycrystal Grain Boundary Minimization ==="
+=== STAGE 1: Polycrystal Grain Boundary Minimization ===
+minimize        1.0e-15 1.0e-15 2000 20000
+Switching to 'neigh_modify every 1 delay 0 check yes' setting during minimization
+Last active /omp style is pair_style eam/alloy/omp
+Neighbor list info ...
+  update: every = 1 steps, delay = 0 steps, check = yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 12.1025
+  ghost atom cutoff = 12.1025
+  binsize = 6.05125, bins = 14 14 14
+  1 neighbor lists, perpetual/occasional/extra = 1 0 0
+  (1) pair eam/alloy/omp, perpetual
+      attributes: half, newton on, omp
+      pair build: half/bin/atomonly/newton/omp
+      stencil: half/bin/3d
+      bin: standard
+Per MPI rank memory allocation (min/avg/max) = 34.97 | 34.97 | 34.97 Mbytes
+   Step          Temp          PotEng         KinEng         TotEng         Press          Volume           Lx             Ly             Lz      
+         0   0             -57704.452      0             -57704.452     -1295.2391      512000         80             80             80           
+       250   0             -60896.734      0             -60896.734     -6768.9538      512000         80             80             80           
+       500   0             -61076.762      0             -61076.762     -5152.4577      512000         80             80             80           
+       750   0             -61170.362      0             -61170.362     -4319.5925      512000         80             80             80           
+      1000   0             -61233.696      0             -61233.696     -3921.3546      512000         80             80             80           
+      1250   0             -61281.24       0             -61281.24      -3709.6098      512000         80             80             80           
+      1500   0             -61317.59       0             -61317.59      -3638.8141      512000         80             80             80           
+      1750   0             -61345.827      0             -61345.827     -3664.5771      512000         80             80             80           
+      2000   0             -61364.656      0             -61364.656     -3552.3291      512000         80             80             80           
+Loop time of 203.424 on 8 procs for 2000 steps with 17682 atoms
+
+332.0% CPU use with 1 MPI tasks x 8 OpenMP threads
+
+Minimization stats:
+  Stopping criterion = max iterations
+  Energy initial, next-to-last, final = 
+     -57704.4517463783  -61364.6221657185  -61364.6555760667
+  Force two-norm initial, final = 1028.0483 0.39983584
+  Force max component initial, final = 141.27506 0.084078802
+  Final line search alpha, max atom move = 0.65707294 0.055245906
+  Iterations, force evaluations = 2000 2769
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 192.93     | 192.93     | 192.93     |   0.0 | 94.84
+Neigh   | 4.9413     | 4.9413     | 4.9413     |   0.0 |  2.43
+Comm    | 0.84852    | 0.84852    | 0.84852    |   0.0 |  0.42
+Output  | 0.001391   | 0.001391   | 0.001391   |   0.0 |  0.00
+Modify  | 2.2897     | 2.2897     | 2.2897     |   0.0 |  1.13
+Other   |            | 2.414      |            |       |  1.19
+
+Nlocal:          17682 ave       17682 max       17682 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:          19324 ave       19324 max       19324 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:     3.0909e+06 ave  3.0909e+06 max  3.0909e+06 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 3090902
+Ave neighs/atom = 174.805
+Neighbor list builds = 150
+Dangerous builds = 0
+
+# STAGE 2: NPT Thermal Equilibration at 300 K, 0 bar
+reset_timestep  0
+timestep        0.001  # 1 fs
+
+dump            1 all custom 1000 equilibrated.lammpstrj id type x y z
+
+velocity        all create 300.0 54321 mom yes rot yes dist gaussian
+fix             npt_eq all npt temp 300.0 300.0 0.1 iso 0.0 0.0 1.0
+
+print           "=== STAGE 2: NPT Thermal Equilibration (5000 steps, 5 ps) ==="
+=== STAGE 2: NPT Thermal Equilibration (5000 steps, 5 ps) ===
+run             5000
+Last active /omp style is pair_style eam/alloy/omp
+Per MPI rank memory allocation (min/avg/max) = 33.51 | 33.51 | 33.51 Mbytes
+   Step          Temp          PotEng         KinEng         TotEng         Press          Volume           Lx             Ly             Lz      
+         0   300           -61364.656      685.63459     -60679.021     -2121.9807      512000         80             80             80           
+       250   178.13193     -60958.995      407.11138     -60551.883     -79.922485      507892.41      79.785488      79.785488      79.785488    
+       500   225.07667     -60864.329      514.40116     -60349.928     -322.71989      499945.17      79.367151      79.367151      79.367151    
+       750   273.85654     -60763.083      625.88504     -60137.198     -396.05883      489781.96      78.825656      78.825656      78.825656    
+      1000   309.74887     -60702.291      707.91514     -59994.376     -576.7632       477289.12      78.149675      78.149675      78.149675    
+      1250   300.57859     -60732.489      686.95692     -60045.532     -543.54941      463973.72      77.416071      77.416071      77.416071    
+      1500   298.60827     -60782.272      682.45386     -60099.818     -473.16866      452966.99      76.798992      76.798992      76.798992    
+      1750   304.69125     -60808.205      696.3562      -60111.849     -370.40765      443009.91      76.232088      76.232088      76.232088    
+      2000   298.86212     -60857.193      683.03402     -60174.159     -351.56062      433968.58      75.709916      75.709916      75.709916    
+      2250   302.99573     -60894.195      692.48117     -60201.713     -547.79996      426048.27      75.246494      75.246494      75.246494    
+      2500   299.65815     -60948.504      684.85331     -60263.651     -489.96519      418137.79      74.777878      74.777878      74.777878    
+      2750   303.76956     -61009.07       694.24972     -60314.82      -569.41649      410900.84      74.343957      74.343957      74.343957    
+      3000   298.58897     -61047.58       682.40974     -60365.17      -243.2234       404452.89      73.953031      73.953031      73.953031    
+      3250   301.40388     -61073.38       688.84307     -60384.537     -410.35062      399079.92      73.624093      73.624093      73.624093    
+      3500   302.52076     -61108.821      691.39566     -60417.425     -273.02076      393996.74      73.310167      73.310167      73.310167    
+      3750   297.89017     -61141.841      680.81268     -60461.028     -218.84972      389340.2       73.020211      73.020211      73.020211    
+      4000   301.71273     -61171.146      689.54894     -60481.597     -242.31204      385519.6       72.780576      72.780576      72.780576    
+      4250   299.52609     -61193.713      684.55149     -60509.161     -119.24318      381969.17      72.556463      72.556463      72.556463    
+      4500   302.82588     -61221.854      692.09299     -60529.761     -183.06759      378517.22      72.337231      72.337231      72.337231    
+      4750   304.77864     -61258.753      696.55593     -60562.197     -242.55344      375430.35      72.140054      72.140054      72.140054    
+      5000   301.30198     -61273.229      688.61019     -60584.619     -110.06623      372298.98      71.938926      71.938926      71.938926    
+Loop time of 315.06 on 8 procs for 5000 steps with 17682 atoms
+
+Performance: 1.371 ns/day, 17.503 hours/ns, 15.870 timesteps/s, 280.613 katom-step/s
+319.9% CPU use with 1 MPI tasks x 8 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 292.54     | 292.54     | 292.54     |   0.0 | 92.85
+Neigh   | 2.8362     | 2.8362     | 2.8362     |   0.0 |  0.90
+Comm    | 1.5597     | 1.5597     | 1.5597     |   0.0 |  0.50
+Output  | 0.25569    | 0.25569    | 0.25569    |   0.0 |  0.08
+Modify  | 17.288     | 17.288     | 17.288     |   0.0 |  5.49
+Other   |            | 0.5845     |            |       |  0.19
+
+Nlocal:          17682 ave       17682 max       17682 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:          24689 ave       24689 max       24689 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    3.41388e+06 ave 3.41388e+06 max 3.41388e+06 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 3413878
+Ave neighs/atom = 193.07081
+Neighbor list builds = 81
+Dangerous builds = 0
+
+# Save checkpoint restart file
+write_restart   equilibrated_polycrystal.restart
+System init for write_restart ...
+Last active /omp style is pair_style eam/alloy/omp
+print           "=== Phase 3 Equilibration Complete: Saved equilibrated_polycrystal.restart ==="
+=== Phase 3 Equilibration Complete: Saved equilibrated_polycrystal.restart ===
+Total wall time: 0:08:39

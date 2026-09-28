@@ -1,0 +1,11 @@
+sample_id,seed,num_grains,atom_count,wall_clock_s,potential,strain_rate,max_strain
+1,101,200,144592,3730.63,Al_zhou.eam.alloy,0.01 ps^-1,0.10
+2,102,250,171153,5517.47,Al_zhou.eam.alloy,0.01 ps^-1,0.10
+3,103,300,198918,6038.95,Al_zhou.eam.alloy,0.01 ps^-1,0.10
+4,104,350,243767,8271.48,Al_zhou.eam.alloy,0.01 ps^-1,0.10
+5,105,400,287922,4084.69,Al_zhou.eam.alloy,0.01 ps^-1,0.10
+6,106,250,173888,5922.74,Al_zhou.eam.alloy,0.01 ps^-1,0.10
+7,107,500,374506,5076.16,Al_zhou.eam.alloy,0.01 ps^-1,0.10
+8,108,300,216867,2973.73,Al_zhou.eam.alloy,0.01 ps^-1,0.10
+9,109,400,291245,4007.75,Al_zhou.eam.alloy,0.01 ps^-1,0.10
+10,110,500,389637,16744.64,Al_zhou.eam.alloy,0.01 ps^-1,0.10

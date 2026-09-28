@@ -1,0 +1,160 @@
+LAMMPS (4 Jul 2026)
+OMP_NUM_THREADS environment is not set. Defaulting to 1 thread.
+  using 1 OpenMP thread(s) per MPI task
+Loaded 1 plugins from C:\Users\mitra\AppData\Local\LAMMPS 64-bit 4Jul2026\plugins
+package omp 8
+set 8 OpenMP thread(s) per MPI task
+using multi-threaded neighbor list subroutines
+# Sample 01 Simulation Pipeline (200 grains, 160 A box)
+units           metal
+dimension       3
+boundary        p p p
+atom_style      atomic
+
+read_data       ../data/sample_01_polycrystal.data
+Reading data file ...
+  orthogonal box = (0 0 0) to (160 160 160)
+  1 by 1 by 1 MPI processor grid
+  reading atoms ...
+  144592 atoms
+  read_data CPU = 0.466 seconds
+
+pair_style      eam/alloy
+pair_coeff      * * ../data/Al_zhou.eam.alloy Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al Al
+Reading eam/alloy potential file ../data/Al_zhou.eam.alloy with DATE: 2007-10-12
+
+neighbor        2.0 bin
+neigh_modify    every 1 delay 5 check yes
+
+# Stage 1: Energy Minimization
+minimize        1.0e-15 1.0e-15 1000 10000
+Switching to 'neigh_modify every 1 delay 0 check yes' setting during minimization
+Last active /omp style is pair_style eam/alloy/omp
+Neighbor list info ...
+  update: every = 1 steps, delay = 0 steps, check = yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 12.1025
+  ghost atom cutoff = 12.1025
+  binsize = 6.05125, bins = 27 27 27
+  1 neighbor lists, perpetual/occasional/extra = 1 0 0
+  (1) pair eam/alloy/omp, perpetual
+      attributes: half, newton on, omp
+      pair build: half/bin/atomonly/newton/omp
+      stencil: half/bin/3d
+      bin: standard
+Per MPI rank memory allocation (min/avg/max) = 190.6 | 190.6 | 190.6 Mbytes
+   Step          Temp          E_pair         E_mol          TotEng         Press     
+         0   0             -484344.93      0             -484344.93     -7310.2968    
+      1000   0             -499174.48      0             -499174.48     -5961.11      
+Loop time of 785.358 on 8 procs for 1000 steps with 144592 atoms
+
+235.2% CPU use with 1 MPI tasks x 8 OpenMP threads
+
+Minimization stats:
+  Stopping criterion = max iterations
+  Energy initial, next-to-last, final = 
+     -484344.929689433  -499172.941683143  -499174.478824355
+  Force two-norm initial, final = 850.06356 2.3533585
+  Force max component initial, final = 155.99162 0.53158926
+  Final line search alpha, max atom move = 0.22420947 0.11918735
+  Iterations, force evaluations = 1000 1000
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 744.16     | 744.16     | 744.16     |   0.0 | 94.75
+Neigh   | 25.244     | 25.244     | 25.244     |   0.0 |  3.21
+Comm    | 1.4587     | 1.4587     | 1.4587     |   0.0 |  0.19
+Output  | 0.004449   | 0.004449   | 0.004449   |   0.0 |  0.00
+Modify  | 3.2837     | 3.2837     | 3.2837     |   0.0 |  0.42
+Other   |            | 11.2       |            |       |  1.43
+
+Nlocal:         144592 ave      144592 max      144592 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:          59262 ave       59262 max       59262 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    2.45385e+07 ave 2.45385e+07 max 2.45385e+07 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 24538463
+Ave neighs/atom = 169.7083
+Neighbor list builds = 53
+Dangerous builds = 0
+
+# Stage 2: NPT Equilibration
+reset_timestep  0
+timestep        0.001
+velocity        all create 300.0 101 mom yes rot yes dist gaussian
+fix             npt_eq all npt temp 300.0 300.0 0.1 iso 0.0 0.0 1.0
+run             1500
+Last active /omp style is pair_style eam/alloy/omp
+Per MPI rank memory allocation (min/avg/max) = 181.7 | 181.7 | 181.7 Mbytes
+   Step          Temp          E_pair         E_mol          TotEng         Press          Volume    
+         0   300           -499174.48      0             -493567.52     -4498.9789      4096000      
+      1500   302.27405     -495941.4       0             -490291.94     -1445.67        3584751.6    
+Loop time of 838.198 on 8 procs for 1500 steps with 144592 atoms
+
+Performance: 0.155 ns/day, 155.222 hours/ns, 1.790 timesteps/s, 258.755 katom-step/s
+267.0% CPU use with 1 MPI tasks x 8 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 804.87     | 804.87     | 804.87     |   0.0 | 96.02
+Neigh   | 10.598     | 10.598     | 10.598     |   0.0 |  1.26
+Comm    | 2.2727     | 2.2727     | 2.2727     |   0.0 |  0.27
+Output  | 0.000717   | 0.000717   | 0.000717   |   0.0 |  0.00
+Modify  | 18.95      | 18.95      | 18.95      |   0.0 |  2.26
+Other   |            | 1.504      |            |       |  0.18
+
+Nlocal:         144592 ave      144592 max      144592 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:          64549 ave       64549 max       64549 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    2.58453e+07 ave 2.58453e+07 max 2.58453e+07 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 25845308
+Ave neighs/atom = 178.74646
+Neighbor list builds = 32
+Dangerous builds = 0
+unfix           npt_eq
+
+# Stage 3: Tensile Loading (10,000 steps -> 10% strain)
+reset_timestep  0
+dump            d_tensile all custom 1000 sample_01_tensile.lammpstrj id type x y z
+fix             deform_x all deform 1 x erate 0.01 remap x
+fix             npt_tr all npt temp 300.0 300.0 0.1 y 0.0 0.0 1.0 z 0.0 0.0 1.0
+run             10000
+Last active /omp style is pair_style eam/alloy/omp
+Per MPI rank memory allocation (min/avg/max) = 187.4 | 187.4 | 187.4 Mbytes
+   Step          Temp          E_pair         E_mol          TotEng         Press          Volume    
+         0   302.27405     -495941.4       0             -490291.94     -1445.67        3584751.6    
+     10000   301.09184     -503297.16      0             -497669.79     -1480.8709      2798738.6    
+Loop time of 2103.06 on 8 procs for 10000 steps with 144592 atoms
+
+Performance: 0.411 ns/day, 58.418 hours/ns, 4.755 timesteps/s, 687.532 katom-step/s
+613.7% CPU use with 1 MPI tasks x 8 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 1967.1     | 1967.1     | 1967.1     |   0.0 | 93.54
+Neigh   | 25.948     | 25.948     | 25.948     |   0.0 |  1.23
+Comm    | 13.117     | 13.117     | 13.117     |   0.0 |  0.62
+Output  | 3.6486     | 3.6486     | 3.6486     |   0.0 |  0.17
+Modify  | 86.468     | 86.468     | 86.468     |   0.0 |  4.11
+Other   |            | 6.775      |            |       |  0.32
+
+Nlocal:         144592 ave      144592 max      144592 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:          83176 ave       83176 max       83176 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    2.88951e+07 ave 2.88951e+07 max 2.88951e+07 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 28895096
+Ave neighs/atom = 199.83883
+Neighbor list builds = 192
+Dangerous builds = 0
+Total wall time: 1:02:10
