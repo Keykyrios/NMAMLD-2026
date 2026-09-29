@@ -241,6 +241,7 @@ def run_experiment():
     best_overall_val_loss = float('inf')
     best_seed_preds = None
     best_seed_targets = None
+    best_overall_state = None
 
     for seed in model_seeds:
         torch.manual_seed(seed)
@@ -364,6 +365,8 @@ def run_experiment():
             best_overall_val_loss = best_gat_val_loss
             best_seed_preds = gat_preds.copy()
             best_seed_targets = true_targets.copy()
+            # Model is currently restored to its best-validation state
+            best_overall_state = copy.deepcopy(gat.state_dict())
 
     test_node_records = []
     node_idx = 0
@@ -378,6 +381,13 @@ def run_experiment():
             node_idx += 1
 
     pd.DataFrame(test_node_records).to_csv("data/gnn_results.csv", index=False)
+
+    # Persist the best GAT model so downstream attention/kernel analysis uses
+    # exactly the model that produced the reported metrics (not a retrained one)
+    os.makedirs("data/checkpoints", exist_ok=True)
+    if best_overall_state is not None:
+        torch.save(best_overall_state, "data/checkpoints/best_gat_model.pt")
+        print(f"Saved best GAT model (val loss {best_overall_val_loss:.4f}) to data/checkpoints/best_gat_model.pt")
 
     metrics_summary = {
         "Baseline_GCN_Test_MSE_mean": float(np.mean(gcn_test_mses)),

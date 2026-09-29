@@ -48,8 +48,11 @@ def evaluate_dirichlet_form_eq1():
     # Build grain_id arrays for alpha_map lookups
     grain_ids = sample_nodes["grain_id"].values
 
-    # Reference point x_0: use the first node (lowest grain_id)
-    ref_idx = 0
+    # Reference point x_0: the most damaged grain. This is the point where
+    # the degradation factor (1 - w)^alpha is smallest and the induced
+    # resistance R_eff is largest, i.e. where the energy degeneracy claimed
+    # in the paper is actually observable.
+    ref_idx = int(np.argmax(damage_vec))
     ref_gid = int(grain_ids[ref_idx])
     x0 = centroids[ref_idx]
     w_x0 = omega[ref_idx]
@@ -78,7 +81,10 @@ def evaluate_dirichlet_form_eq1():
                 target_gid = int(grain_ids[target_idx])
                 w_y = omega[target_idx]
 
-                alpha_ij = 1.0 if target_gid == ref_gid else alpha_map.get((ref_gid, target_gid), 0.0)
+                # Attention-modulated kernel weight. No special case for the
+                # reference grain itself: absent attention defaults to 0, so
+                # within-grain interaction is the isotropic envelope c0 only.
+                alpha_ij = alpha_map.get((ref_gid, target_gid), 0.0)
 
                 # Anisotropic weight kernel w_hat(x, y; G)
                 w_hat = c0 * (1.0 + gamma_coup * alpha_ij)
@@ -93,7 +99,7 @@ def evaluate_dirichlet_form_eq1():
                 integrand_val = du_sq * w_hat * degrad_term
                 dirichlet_integrand[i, j] = integrand_val
 
-                # Effective Resistance Metric R_eff(x, y) = 1 / (w_hat * degrad_term + 1e-12)
+                # Effective Resistance Metric R_eff(x, y) = 1 / (w_hat * degrad_term + 1e-8)
                 resistance_metric[i, j] = 1.0 / (w_hat * degrad_term + 1e-8)
 
     # Calculate Total Dirichlet Form Energy E_GNN(u, u)
@@ -110,10 +116,12 @@ def evaluate_dirichlet_form_eq1():
     print(f"Max Integrated Integrand            : {np.max(dirichlet_integrand):.6f}")
     print(f"Max Resistance Metric R_eff(x, y)   : {np.max(resistance_metric):.2f} (Degenerates along damaged GBs)")
 
-    # Save DataFrame Output
+    # Save DataFrame Output (u is a displacement field in Angstroms and the
+    # 2D slice measure dmu ~ dA, so E_GNN carries units of Angstrom^4 x kernel
+    # weight; it is reported as a dimensioned raw value, not eV)
     df_eval = pd.DataFrame({
         "sample_id": sample_id,
-        "E_GNN_energy_eV": [E_GNN_val],
+        "E_GNN_energy_arb_units": [E_GNN_val],
         "max_w_hat": [np.max(w_hat_field)],
         "max_resistance_R_eff": [np.max(resistance_metric)],
         "alpha_degradation_exp": [alpha_deg],

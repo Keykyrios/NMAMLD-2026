@@ -95,7 +95,7 @@ def generate_all_figures():
     ax.set_title(f"Learned Attention vs. Boundary Misorientation (ρ = {rho:.3f})", fontsize=11, fontweight="bold")
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig("plots/fig5_attention_vs_damage.png", dpi=300)
+    plt.savefig("plots/fig5_attention_vs_misorientation.png", dpi=300)
     plt.close()
 
     # 6. Nonlocal Kernel Field
@@ -119,7 +119,7 @@ def generate_all_figures():
         "plots/fig2_microstructure_graph.png",
         "plots/fig3_held_out_test_predictions.png",
         "plots/fig4_gcn_vs_gat_test_performance.png",
-        "plots/fig5_attention_vs_damage.png",
+        "plots/fig5_attention_vs_misorientation.png",
         "plots/fig6_gamma_sensitivity.png"
     ]
     sub_titles = [

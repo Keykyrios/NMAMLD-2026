@@ -30,49 +30,19 @@ def run_attention_and_kernel_analysis():
     val_ids   = [8]
     test_ids  = [9, 10]
 
-    # 2. Re-instantiate and Train Best GAT Model
-    torch.manual_seed(42)
-    # in_channels=9: 6 Euler sin/cos + taylor_factor + atom_count + node_degree
-    # edge_dim=4: distance, sin(misorientation), cos(misorientation), GB energy
+    # 2. Load the Best GAT Model saved by correct_multisample_gnn.py so the
+    #    attention weights come from exactly the model that produced the
+    #    reported held-out test metrics.
+    ckpt_path = "data/checkpoints/best_gat_model.pt"
     gat = HybridMPNN_GAT(in_channels=9, hidden_channels=64, edge_dim=4, out_channels=1, heads=4).to(device)
-    optimizer = torch.optim.Adam(gat.parameters(), lr=0.003, weight_decay=1e-4)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=30, factor=0.5, min_lr=1e-5)
-    criterion = torch.nn.MSELoss()
-
-    train_graphs = [build_pyg_graph(sid, nodes_df, edges_df, node_mean, node_std, edge_mean, edge_std, target_mean, target_std).to(device) for sid in train_ids]
-    val_graphs   = [build_pyg_graph(sid, nodes_df, edges_df, node_mean, node_std, edge_mean, edge_std, target_mean, target_std).to(device) for sid in val_ids]
-
-    import copy
-    best_val_loss = float('inf')
-    best_state = None
-    patience_counter = 0
-
-    for epoch in range(500):
-        gat.train()
-        for g in train_graphs:
-            optimizer.zero_grad()
-            out = gat(g.x, g.edge_index, g.edge_attr)
-            loss = criterion(out, g.y)
-            loss.backward()
-            optimizer.step()
-
-        gat.eval()
-        with torch.no_grad():
-            val_loss = sum(criterion(gat(g.x, g.edge_index, g.edge_attr), g.y).item() for g in val_graphs) / len(val_graphs)
-        scheduler.step(val_loss)
-
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            best_state = copy.deepcopy(gat.state_dict())
-            patience_counter = 0
-        else:
-            patience_counter += 1
-        if patience_counter >= 80:
-            print(f"  Attention model early stop at epoch {epoch}")
-            break
-
-    if best_state is not None:
-        gat.load_state_dict(best_state)
+    if not os.path.exists(ckpt_path):
+        raise FileNotFoundError(
+            f"{ckpt_path} not found. Run gnn/correct_multisample_gnn.py first — "
+            "it saves the best-of-5-seeds model that this script must reuse."
+        )
+    state_dict = torch.load(ckpt_path, map_location=device)
+    gat.load_state_dict(state_dict)
+    print("Loaded best GAT model checkpoint from", ckpt_path)
 
     gat.eval()
 
@@ -94,6 +64,12 @@ def run_attention_and_kernel_analysis():
             e_idx = edge_index_2.cpu().numpy()
 
             for i in range(e_idx.shape[1]):
+                # GATConv adds self-loops before attention; drop them so the
+                # saved weights contain only real grain-boundary edges (a
+                # self-loop would otherwise be logged with distance/misorientation
+                # defaults of 0.0 and pollute the correlation analysis)
+                if e_idx[0, i] == e_idx[1, i]:
+                    continue
                 u = int(idx_to_gid[e_idx[0, i]])
                 v = int(idx_to_gid[e_idx[1, i]])
                 w = float(alpha_np[i])

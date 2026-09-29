@@ -2,6 +2,7 @@ import numpy as np
 import json
 import os
 import pandas as pd
+from scipy.spatial import KDTree
 
 def calculate_fcc_taylor_factor(R):
     """
@@ -54,28 +55,59 @@ def calculate_read_shockley_gb_energy(misorientation_deg, gamma_0=0.56, theta_m=
     return float(gamma_0 * ratio * (1.0 - np.log(ratio)))
 
 def parse_lammpstrj(file_path):
+    """
+    Reads the LAST frame of a LAMMPS custom dump and returns (box_len, df_atoms).
+
+    Expects the dump to include image flags: `id type x y z ix iy iz`.
+    Returned positions are UNWRAPPED (x + ix * Lx, etc.) so that grains which
+    straddle a periodic boundary get meaningful per-grain position statistics.
+    Box lengths are taken from the final frame's box bounds.
+
+    Falls back gracefully (no unwrapping, wrapped coords kept) if the dump has
+    no image-flag columns (e.g. legacy trajectories).
+    """
     with open(file_path, "r") as f:
         lines = f.readlines()
 
     timestep_indices = [i for i, line in enumerate(lines) if "ITEM: TIMESTEP" in line]
     last_idx = timestep_indices[-1]
 
+    # ITEM: BOX BOUNDS is the 5th line after ITEM: TIMESTEP (0 1 2 3 4)
     box_idx = last_idx + 5
     box_x = [float(x) for x in lines[box_idx].split()]
     box_y = [float(x) for x in lines[box_idx+1].split()]
     box_z = [float(x) for x in lines[box_idx+2].split()]
     box_len = [box_x[1] - box_x[0], box_y[1] - box_y[0], box_z[1] - box_z[0]]
 
+    # Frame layout from ITEM: TIMESTEP at +0: timestep value +1, ITEM: NUMBER
+    # OF ATOMS +2, count +3, ITEM: BOX BOUNDS header +4, three bounds lines
+    # +5..+7, ITEM: ATOMS header +8, first atom +9.
+    header_line = lines[last_idx + 8]
+    assert header_line.startswith("ITEM: ATOMS"), (
+        f"Unexpected dump layout: expected ATOMS header, got: {header_line!r}"
+    )
+    columns = header_line.split()[2:]  # strip "ITEM:", "ATOMS"
+    col_idx = {name: k for k, name in enumerate(columns)}
+
+    has_images = all(c in col_idx for c in ("ix", "iy", "iz"))
+
     atoms_idx = last_idx + 8
     atom_lines = lines[atoms_idx+1:]
-    
+
     data = []
     for l in atom_lines:
         if "ITEM: TIMESTEP" in l:
             break
         parts = l.split()
-        if len(parts) >= 5:
-            data.append([int(parts[0]), int(parts[1]), float(parts[2]), float(parts[3]), float(parts[4])])
+        if len(parts) < len(columns):
+            continue
+        x, y, z = float(parts[col_idx["x"]]), float(parts[col_idx["y"]]), float(parts[col_idx["z"]])
+        if has_images:
+            ix, iy, iz = (int(parts[col_idx[c]]) for c in ("ix", "iy", "iz"))
+            x += ix * box_len[0]
+            y += iy * box_len[1]
+            z += iz * box_len[2]
+        data.append([int(parts[col_idx["id"]]), int(parts[col_idx["type"]]), x, y, z])
 
     df_atoms = pd.DataFrame(data, columns=["id", "type", "x", "y", "z"]).sort_values("id").reset_index(drop=True)
     return box_len, df_atoms
@@ -130,9 +162,126 @@ def calculate_misorientation(R1, R2):
     return min_angle
 
 
+def compute_voronoi_adjacency(seeds, box_len, distance_threshold_factor=1.05):
+    """
+    Computes grain adjacency from periodic Voronoi tessellation.
+
+    Two grains are adjacent iff they share a Voronoi face, i.e. there exist
+    points closer to both seeds than to any other seed (a bisector ridge
+    segment of the two-seed KDTree, extended over 27 periodic images).
+
+    Parameters
+    ----------
+    seeds : (N, 3) array of grain seed positions in [0, L)^3
+    box_len : float, periodic box edge length (cubic box)
+    distance_threshold_factor : float
+        Two grains are also considered adjacent if their (periodic-image)
+        seed separation is below this factor times the characteristic seed
+        spacing d0 = (V / N)^(1/3). Provides robustness against numerically
+        degenerate (sliver) Voronoi cells whose ridge detection fails.
+
+    Returns
+    -------
+    list of (gid_a, gid_b) undirected adjacency pairs with 1-based grain ids
+    """
+    seeds = np.asarray(seeds, dtype=float)
+    n_grains = len(seeds)
+    d0 = (box_len ** 3 / n_grains) ** (1.0 / 3.0)  # characteristic seed spacing
+
+    # 27 periodic images of every seed
+    ext_seeds, ext_ids = [], []
+    for sx in (-box_len, 0.0, box_len):
+        for sy in (-box_len, 0.0, box_len):
+            for sz in (-box_len, 0.0, box_len):
+                shift = np.array([sx, sy, sz])
+                ext_seeds.append(seeds + shift)
+                ext_ids.append(np.arange(1, n_grains + 1))
+    ext_seeds = np.vstack(ext_seeds)
+    ext_ids = np.concatenate(ext_ids)
+    tree = KDTree(ext_seeds)
+
+    adj_pairs = set()
+    # Candidate pairs: all seeds (any periodic image) within 2*d0. In a
+    # Poisson-Voronoi tessellation essentially every face-sharing neighbor
+    # pair lies within this radius, and the expected candidate count is
+    # (4/3)*pi*2^3 ~ 34 seeds, keeping the ridge verification cheap.
+    candidates = tree.query_ball_point(seeds, r=2.0 * d0)
+    for g_idx, hits in enumerate(candidates):
+        g_id = g_idx + 1
+        seed = seeds[g_idx]
+        for j in hits:
+            other_gid = int(ext_ids[j])
+            if other_gid == g_id:
+                continue
+            pair = (min(g_id, other_gid), max(g_id, other_gid))
+            if pair in adj_pairs:
+                continue
+            # Verify shared Voronoi face: points along the seed-seed
+            # bisector that are closer to both seeds than to any other seed.
+            other = ext_seeds[j]
+            if _shares_voronoi_face(seed, other, tree):
+                adj_pairs.add(pair)
+
+    # Robustness: merge in near-neighbor pairs (guards against sliver cells
+    # whose ridge verification can numerically fail)
+    near = tree.query_ball_point(seeds, r=distance_threshold_factor * d0)
+    for g_idx, hits in enumerate(near):
+        g_id = g_idx + 1
+        for j in hits:
+            other_gid = int(ext_ids[j])
+            if other_gid == g_id:
+                continue
+            adj_pairs.add((min(g_id, other_gid), max(g_id, other_gid)))
+
+    return sorted(adj_pairs)
+
+
+def _shares_voronoi_face(seed_a, seed_b, tree, n_radii=4, n_dirs=6):
+    """
+    True iff a and b share a Voronoi face: exists a point ON the perpendicular
+    bisector plane of a-b that is closer to both a and b than to any other
+    seed (strictly closer than the third-nearest seed, so that measure-zero
+    edge/vertex ties — e.g. the 8-fold-degenerate vertices of a cubic seed
+    lattice — are rejected).
+
+    On the bisector plane d_a == d_b by definition, so the condition reduces
+    to: both seeds are the (tied) nearest and every other seed is strictly
+    farther. Sample points are laid out on concentric in-plane rings around
+    the pair midpoint to also catch face lobes of near-degenerate sliver
+    cells whose face does not contain the midpoint itself.
+    """
+    seed_a = np.asarray(seed_a, dtype=float)
+    seed_b = np.asarray(seed_b, dtype=float)
+    ab = seed_b - seed_a
+    half_d = 0.5 * np.linalg.norm(ab)
+    n_hat = ab / np.linalg.norm(ab)
+
+    # Orthonormal basis of the bisector plane
+    tmp = np.array([1.0, 0.0, 0.0])
+    if abs(np.dot(tmp, n_hat)) > 0.9:
+        tmp = np.array([0.0, 1.0, 0.0])
+    e1 = np.cross(n_hat, tmp)
+    e1 /= np.linalg.norm(e1)
+    e2 = np.cross(n_hat, e1)
+
+    mid = 0.5 * (seed_a + seed_b)
+    for rho in np.linspace(0.0, 0.9, n_radii) * half_d:
+        for k in range(n_dirs):
+            phi = np.pi * k / n_dirs
+            u = np.cos(phi) * e1 + np.sin(phi) * e2
+            for sgn in (1.0, -1.0):
+                pt = mid + sgn * rho * u
+                dists, _ = tree.query(pt, k=3)
+                d_a = np.linalg.norm(pt - seed_a)
+                if d_a <= dists[0] + 1e-9 and d_a < dists[2] - 1e-9:
+                    return True
+    return False
+
+
 if __name__ == "__main__":
     # Helper module — imported by generate_multisample_dataset.py
     # Run generate_multisample_dataset.py for the full pipeline.
     print("This module provides helper functions for microstructure analysis.")
     print("Functions: calculate_fcc_taylor_factor, calculate_misorientation,")
-    print("           calculate_read_shockley_gb_energy, parse_lammpstrj")
+    print("           calculate_read_shockley_gb_energy, parse_lammpstrj,")
+    print("           compute_voronoi_adjacency")
