@@ -85,13 +85,17 @@ def run_attention_and_kernel_analysis():
             with torch.no_grad():
                 out, (edge_index_2, alpha) = gat(g.x, g.edge_index, g.edge_attr, return_attention_weights=True)
 
+            # Build proper node_index -> grain_id mapping
+            sample_nodes = nodes_df[nodes_df["sample_id"] == sid].sort_values("grain_id").reset_index(drop=True)
+            idx_to_gid = sample_nodes["grain_id"].values  # idx_to_gid[node_idx] = grain_id
+
             edges_sample = edges_df[edges_df["sample_id"] == sid].copy().reset_index(drop=True)
             alpha_np = alpha.squeeze().cpu().numpy()
             e_idx = edge_index_2.cpu().numpy()
 
             for i in range(e_idx.shape[1]):
-                u = int(e_idx[0, i]) + 1
-                v = int(e_idx[1, i]) + 1
+                u = int(idx_to_gid[e_idx[0, i]])
+                v = int(idx_to_gid[e_idx[1, i]])
                 w = float(alpha_np[i])
 
                 # Match with edge features
@@ -155,8 +159,10 @@ def run_attention_and_kernel_analysis():
         alpha_map[(int(row["source_grain"]), int(row["target_grain"]))] = float(row["attention_weight"])
 
     centroids = test_sample_nodes[["centroid_x", "centroid_y", "centroid_z"]].values
-    ref_grain = 1
-    x0 = centroids[ref_grain - 1]
+    grain_ids = test_sample_nodes["grain_id"].values
+    ref_idx = 0
+    ref_gid = int(grain_ids[ref_idx])
+    x0 = centroids[ref_idx]
 
     # Scale grid to match the box size of the test sample
     box_size = max(centroids.max(axis=0) - centroids.min(axis=0)) * 1.2
@@ -174,8 +180,9 @@ def run_attention_and_kernel_analysis():
                 r = np.linalg.norm(pt - x0)
                 if 0.1 < r <= horizon_delta:
                     c0 = np.exp(-(r / horizon_delta)**2)
-                    target_g = int(np.argmin([np.linalg.norm(pt - c) for c in centroids])) + 1
-                    alpha_ij = 1.0 if target_g == ref_grain else alpha_map.get((ref_grain, target_g), 0.0)
+                    target_idx = int(np.argmin([np.linalg.norm(pt - c) for c in centroids]))
+                    target_gid = int(grain_ids[target_idx])
+                    alpha_ij = 1.0 if target_gid == ref_gid else alpha_map.get((ref_gid, target_gid), 0.0)
                     C_vals[i, j] = c0 * (1.0 + gamma * alpha_ij)
 
         max_c = float(np.max(C_vals))

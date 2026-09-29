@@ -45,10 +45,14 @@ def evaluate_dirichlet_form_eq1():
     y_range = np.linspace(0, box_size, grid_size)
     X, Y = np.meshgrid(x_range, y_range)
 
-    # Reference point x_0 in Grain 1
-    ref_grain = 1
-    x0 = centroids[ref_grain - 1]
-    w_x0 = omega[ref_grain - 1]
+    # Build grain_id arrays for alpha_map lookups
+    grain_ids = sample_nodes["grain_id"].values
+
+    # Reference point x_0: use the first node (lowest grain_id)
+    ref_idx = 0
+    ref_gid = int(grain_ids[ref_idx])
+    x0 = centroids[ref_idx]
+    w_x0 = omega[ref_idx]
 
     horizon_delta = box_size * 0.15 # Horizon delta scaled to ~15% of box
 
@@ -70,10 +74,11 @@ def evaluate_dirichlet_form_eq1():
                 c0 = np.exp(-(r / horizon_delta)**2)
 
                 # Nearest grain assignment for spatial point y = pt
-                target_g = int(np.argmin([np.linalg.norm(pt - c) for c in centroids])) + 1
-                w_y = omega[target_g - 1]
+                target_idx = int(np.argmin([np.linalg.norm(pt - c) for c in centroids]))
+                target_gid = int(grain_ids[target_idx])
+                w_y = omega[target_idx]
 
-                alpha_ij = 1.0 if target_g == ref_grain else alpha_map.get((ref_grain, target_g), 0.0)
+                alpha_ij = 1.0 if target_gid == ref_gid else alpha_map.get((ref_gid, target_gid), 0.0)
 
                 # Anisotropic weight kernel w_hat(x, y; G)
                 w_hat = c0 * (1.0 + gamma_coup * alpha_ij)

@@ -34,9 +34,12 @@ def generate_all_figures():
     c = sample1_nodes[["centroid_x", "centroid_y", "centroid_z"]].values
     dmg = sample1_nodes["grain_damage_index"].values
     sc = ax3d.scatter(c[:,0], c[:,1], c[:,2], c=dmg, cmap="plasma", s=200, edgecolors="black")
+    gid_to_idx = {int(gid): idx for idx, gid in enumerate(sample1_nodes["grain_id"].values)}
     for _, r in sample1_edges.iterrows():
-        u = int(r["source_grain"]) - 1
-        v = int(r["target_grain"]) - 1
+        u = gid_to_idx.get(int(r["source_grain"]), -1)
+        v = gid_to_idx.get(int(r["target_grain"]), -1)
+        if u < 0 or v < 0:
+            continue
         p1, p2 = c[u], c[v]
         ax3d.plot([p1[0], p2[0]], [p1[1], p2[1]], [p1[2], p2[2]], color="gray", alpha=0.5)
     ax3d.set_title("3D Microstructure Grain Boundary Graph (Sample 01)", fontsize=12, fontweight="bold")

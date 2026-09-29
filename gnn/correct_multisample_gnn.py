@@ -80,14 +80,18 @@ def build_pyg_graph(sample_id, df_nodes, df_edges, node_scaler_mean, node_scaler
     sample_edges = df_edges[df_edges["sample_id"] == sample_id].copy()
     num_grains = len(sample_nodes)
 
+    # Build explicit grain_id -> node_index mapping (handles non-contiguous grain_ids)
+    grain_ids = sample_nodes["grain_id"].values
+    gid_to_idx = {int(gid): idx for idx, gid in enumerate(grain_ids)}
+
     # Count node degree (number of grain boundaries per grain) — purely structural, pre-loading
     degree_count = np.zeros(num_grains)
     for _, row in sample_edges.iterrows():
-        u = int(row["source_grain"]) - 1
-        v = int(row["target_grain"]) - 1
-        if 0 <= u < num_grains:
+        u = gid_to_idx.get(int(row["source_grain"]), -1)
+        v = gid_to_idx.get(int(row["target_grain"]), -1)
+        if u >= 0:
             degree_count[u] += 1
-        if 0 <= v < num_grains:
+        if v >= 0:
             degree_count[v] += 1
 
     # Node Features (9 features):
@@ -123,8 +127,10 @@ def build_pyg_graph(sample_id, df_nodes, df_edges, node_scaler_mean, node_scaler
     raw_edge_attrs = []
 
     for _, row in sample_edges.iterrows():
-        u = int(row["source_grain"]) - 1
-        v = int(row["target_grain"]) - 1
+        u = gid_to_idx.get(int(row["source_grain"]), -1)
+        v = gid_to_idx.get(int(row["target_grain"]), -1)
+        if u < 0 or v < 0:
+            continue  # skip edges involving dropped grains
         dist = float(row["distance_A"])
         misorient_rad = np.radians(float(row["misorientation_deg"]))
         gb_energy = float(row["gb_interface_energy_Jm2"])
@@ -167,11 +173,13 @@ def run_experiment():
         for sid in nodes_sub["sample_id"].unique():
             sn = nodes_sub[nodes_sub["sample_id"] == sid].sort_values("grain_id").reset_index(drop=True)
             se = edges_sub[edges_sub["sample_id"] == sid]
+            gid_map = {int(gid): idx for idx, gid in enumerate(sn["grain_id"].values)}
             deg = np.zeros(len(sn))
             for _, row in se.iterrows():
-                u, v = int(row["source_grain"]) - 1, int(row["target_grain"]) - 1
-                if 0 <= u < len(sn): deg[u] += 1
-                if 0 <= v < len(sn): deg[v] += 1
+                u = gid_map.get(int(row["source_grain"]), -1)
+                v = gid_map.get(int(row["target_grain"]), -1)
+                if u >= 0: deg[u] += 1
+                if v >= 0: deg[v] += 1
             degrees.extend(deg)
         return np.array(degrees)
 
