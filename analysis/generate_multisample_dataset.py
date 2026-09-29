@@ -140,11 +140,14 @@ def run_single_simulation_sample(sample_id, seed, num_grains):
         for g_idx in range(num_grains):
             g_id = g_idx + 1
             R = rotation_matrices[g_idx]
-            seed = grain_seeds[g_idx]
+            # NOTE: g_seed, NOT `seed` — `seed` is this function's integer RNG
+            # seed parameter and is interpolated into the LAMMPS velocity command
+            # below; shadowing it with a position vector broke that command.
+            g_seed = grain_seeds[g_idx]
 
             # Rotate the global lattice into this grain's crystallographic orientation
-            centered = grid_coords - seed
-            rotated = (R @ centered.T).T + seed
+            centered = grid_coords - g_seed
+            rotated = (R @ centered.T).T + g_seed
 
             # Box filter: keep only atoms inside [0, box_len)^3
             in_box = np.all((rotated >= 0) & (rotated < box_len), axis=1)
@@ -261,7 +264,7 @@ minimize        1.0e-15 1.0e-15 1000 10000
 # Stage 2: NPT Equilibration
 reset_timestep  0
 timestep        0.001
-velocity        all create 300.0 {seed} mom yes rot yes dist gaussian
+velocity        all create 300.0 {int(seed)} mom yes rot yes dist gaussian
 fix             npt_eq all npt temp 300.0 300.0 0.1 iso 0.0 0.0 1.0
 run             1500
 unfix           npt_eq
