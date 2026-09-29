@@ -100,7 +100,7 @@ def evaluate_dirichlet_form_eq1():
     print("  DIRICHLET FORM E_GNN(u, u) EVALUATION   ")
     print("==========================================")
     print(f"Evaluated Sample ID                 : {sample_id} (Held-Out Test Set)")
-    print(f"Total Dirichlet Energy E_GNN(u, u)  : {E_GNN_val:.6f} eV")
+    print(f"Total Dirichlet Energy E_GNN(u, u)  : {E_GNN_val:.6f}")
     print(f"Max Anisotropic Kernel w_hat(x,y;G) : {np.max(w_hat_field):.4f}")
     print(f"Max Integrated Integrand            : {np.max(dirichlet_integrand):.6f}")
     print(f"Max Resistance Metric R_eff(x, y)   : {np.max(resistance_metric):.2f} (Degenerates along damaged GBs)")
@@ -132,7 +132,7 @@ def evaluate_dirichlet_form_eq1():
 
     im2 = ax2.imshow(np.log10(resistance_metric + 1.0), extent=[0, box_size, 0, box_size], origin="lower", cmap="plasma")
     ax2.scatter(x0[0], x0[1], color="cyan", marker="*", s=200, label="$x_0$ Ref Point")
-    ax2.set_title("Induced Resistance Metric $\\log_{10}(R_{eff}(x, y))$ (Capacity Theory)", fontsize=11, fontweight="bold")
+    ax2.set_title("Induced Resistance Metric $\\log_{10}(R_{eff}(x, y))$", fontsize=11, fontweight="bold")
     ax2.set_xlabel("X Position [Å]", fontsize=11)
     ax2.set_ylabel("Y Position [Å]", fontsize=11)
     ax2.legend(loc="upper right")

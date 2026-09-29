@@ -71,7 +71,7 @@ def run_single_simulation_sample(sample_id, seed, num_grains):
     rotation_matrices = []
     for g_id in range(num_grains):
         phi1 = float(np.random.uniform(0, 360))
-        theta = float(np.random.uniform(0, 180))
+        theta = float(np.degrees(np.arccos(np.random.uniform(-1, 1))))  # proper SO(3) sampling
         phi2 = float(np.random.uniform(0, 360))
         
         p1, th, p2 = np.radians(phi1), np.radians(theta), np.radians(phi2)
@@ -95,15 +95,19 @@ def run_single_simulation_sample(sample_id, seed, num_grains):
     # Only regenerate polycrystal data file if it does not already exist
     if not os.path.exists(data_path):
         print(f"  Generating Voronoi polycrystal ({num_grains} grains, {box_len:.0f} A box)...")
+
+        # Generate FCC lattice grid with padding for rotation coverage
+        pad = 3
         grid_coords = []
-        for i in range(-1, n_unit_cells + 1):
-            for j in range(-1, n_unit_cells + 1):
-                for k in range(-1, n_unit_cells + 1):
+        for i in range(-pad, n_unit_cells + pad + 1):
+            for j in range(-pad, n_unit_cells + pad + 1):
+                for k in range(-pad, n_unit_cells + pad + 1):
                     base_pos = np.array([i, j, k]) * lattice_param
                     for b in fcc_basis:
                         grid_coords.append(base_pos + b)
         grid_coords = np.array(grid_coords)
 
+        # Build periodic Voronoi assignment tree (27 periodic images)
         extended_seeds, extended_ids = [], []
         for sx in [-box_len, 0.0, box_len]:
             for sy in [-box_len, 0.0, box_len]:
@@ -112,27 +116,55 @@ def run_single_simulation_sample(sample_id, seed, num_grains):
                     for g_id, s in enumerate(grain_seeds):
                         extended_seeds.append(s + shift)
                         extended_ids.append(g_id + 1)
+        extended_seeds = np.array(extended_seeds)
+        extended_ids = np.array(extended_ids)
+        voronoi_tree = KDTree(extended_seeds)
 
-        tree = KDTree(np.array(extended_seeds))
-        _, nearest = tree.query(grid_coords)
-        assigned = np.array(extended_ids)[nearest]
+        # Per-grain lattice generation: rotate FIRST, then Voronoi-assign.
+        # Each grain generates its own oriented FCC lattice; only atoms
+        # whose nearest Voronoi seed (after rotation) is this grain are kept.
+        # This avoids the gap/overlap artifacts of assign-then-rotate.
+        all_pos, all_gids = [], []
+        for g_idx in range(num_grains):
+            g_id = g_idx + 1
+            R = rotation_matrices[g_idx]
+            seed = grain_seeds[g_idx]
 
-        final_pos, final_gids = [], []
-        for pos, g_id in zip(grid_coords, assigned):
-            R = rotation_matrices[g_id - 1]
-            s_pos = grain_seeds[g_id - 1]
-            rot_pos = R @ (pos - s_pos) + s_pos
-            if 0.0 <= rot_pos[0] < box_len and 0.0 <= rot_pos[1] < box_len and 0.0 <= rot_pos[2] < box_len:
-                final_pos.append(rot_pos)
-                final_gids.append(g_id)
+            # Rotate the global lattice into this grain's crystallographic orientation
+            centered = grid_coords - seed
+            rotated = (R @ centered.T).T + seed
 
-        final_pos = np.array(final_pos)
-        final_gids = np.array(final_gids)
+            # Box filter: keep only atoms inside [0, box_len)^3
+            in_box = np.all((rotated >= 0) & (rotated < box_len), axis=1)
+            candidates = rotated[in_box]
 
+            # Voronoi assignment on ROTATED positions:
+            # keep only atoms whose nearest grain seed is this grain
+            _, nearest_idx = voronoi_tree.query(candidates)
+            assigned_ids = extended_ids[nearest_idx]
+            own_mask = (assigned_ids == g_id)
+
+            own_atoms = candidates[own_mask]
+            all_pos.append(own_atoms)
+            all_gids.extend([g_id] * len(own_atoms))
+
+            if (g_idx + 1) % 50 == 0 or g_idx == num_grains - 1:
+                print(f"    Grain {g_idx + 1}/{num_grains}: {len(own_atoms)} atoms")
+
+        final_pos = np.vstack(all_pos)
+        final_gids = np.array(all_gids)
+        print(f"  Total atoms before overlap removal: {len(final_pos)}")
+
+        # Remove overlapping atoms at grain boundaries.
+        # Fixed: only remove j if partner i is still kept,
+        # preventing chain over-deletion at multi-atom boundary clusters.
         pos_tree = KDTree(final_pos)
         pairs = pos_tree.query_pairs(r=2.1)
-        remove_idx = set(j for (i, j) in pairs)
-        keep_mask = np.array([i not in remove_idx for i in range(len(final_pos))])
+        remove_idx = set()
+        for (i, j) in sorted(pairs):
+            if i not in remove_idx and j not in remove_idx:
+                remove_idx.add(j)
+        keep_mask = np.array([idx not in remove_idx for idx in range(len(final_pos))])
         clean_pos = final_pos[keep_mask]
         clean_gids = final_gids[keep_mask]
 

@@ -13,12 +13,12 @@ def calculate_fcc_taylor_factor(R):
         [ 1,  1,  1], [ 1,  1, -1], [ 1, -1,  1], [ 1, -1, -1]
     ]) / np.sqrt(3)
 
-    # 3 <110> directions per plane -> 12 slip systems
+    # 3 <110> directions per plane -> 12 slip systems total
     directions = np.array([
-        [ 1, -1,  0], [ 1,  0, -1], [ 0,  1, -1],
-        [ 1, -1,  0], [ 1,  0,  1], [ 0,  1,  1],
-        [ 1,  1,  0], [ 1,  0, -1], [ 0,  1,  1],
-        [ 1,  1,  0], [ 1,  0,  1], [ 0,  1, -1]
+        [ 1, -1,  0], [ 1,  0, -1], [ 0,  1, -1],   # plane 0: (1,1,1)
+        [ 1, -1,  0], [ 1,  0,  1], [ 0,  1,  1],   # plane 1: (1,1,-1)
+        [ 1,  1,  0], [ 1,  0, -1], [ 0,  1,  1],   # plane 2: (1,-1,1)
+        [ 1,  1,  0], [ 1,  0,  1], [ 0,  1, -1]    # plane 3: (1,-1,-1)
     ]) / np.sqrt(2)
 
     # Loading direction in sample reference frame: d = [1, 0, 0]
@@ -28,9 +28,12 @@ def calculate_fcc_taylor_factor(R):
     d_crystal = R.T @ d_sample
 
     schmid_factors = []
-    for n, b in zip(normals, directions):
-        m = abs(np.dot(n, d_crystal) * np.dot(b, d_crystal))
-        schmid_factors.append(m)
+    for plane_idx in range(4):
+        n = normals[plane_idx]
+        for slip_idx in range(3):
+            b = directions[plane_idx * 3 + slip_idx]
+            m = abs(np.dot(n, d_crystal) * np.dot(b, d_crystal))
+            schmid_factors.append(m)
 
     max_schmid = max(schmid_factors)
     if max_schmid < 1e-4:
@@ -77,86 +80,59 @@ def parse_lammpstrj(file_path):
     df_atoms = pd.DataFrame(data, columns=["id", "type", "x", "y", "z"]).sort_values("id").reset_index(drop=True)
     return box_len, df_atoms
 
+def _cubic_symmetry_ops():
+    """Returns the 24 proper rotation matrices of the cubic (O) symmetry group."""
+    return np.array([
+        [[ 1, 0, 0],[ 0, 1, 0],[ 0, 0, 1]],  # identity
+        [[ 0,-1, 0],[ 1, 0, 0],[ 0, 0, 1]],  # 90° about [001]
+        [[-1, 0, 0],[ 0,-1, 0],[ 0, 0, 1]],  # 180° about [001]
+        [[ 0, 1, 0],[-1, 0, 0],[ 0, 0, 1]],  # 270° about [001]
+        [[ 0, 0, 1],[ 0, 1, 0],[-1, 0, 0]],  # 90° about [010]
+        [[-1, 0, 0],[ 0, 1, 0],[ 0, 0,-1]],  # 180° about [010]
+        [[ 0, 0,-1],[ 0, 1, 0],[ 1, 0, 0]],  # 270° about [010]
+        [[ 1, 0, 0],[ 0, 0,-1],[ 0, 1, 0]],  # 90° about [100]
+        [[ 1, 0, 0],[ 0,-1, 0],[ 0, 0,-1]],  # 180° about [100]
+        [[ 1, 0, 0],[ 0, 0, 1],[ 0,-1, 0]],  # 270° about [100]
+        [[ 0, 0, 1],[ 1, 0, 0],[ 0, 1, 0]],  # 120° about [111]
+        [[ 0, 1, 0],[ 0, 0, 1],[ 1, 0, 0]],  # 240° about [111]
+        [[ 0, 0,-1],[-1, 0, 0],[ 0, 1, 0]],  # 120° about [-111]
+        [[ 0,-1, 0],[ 0, 0, 1],[-1, 0, 0]],  # 240° about [-111]
+        [[ 0, 0, 1],[-1, 0, 0],[ 0,-1, 0]],  # 120° about [1-11]
+        [[ 0,-1, 0],[ 0, 0,-1],[ 1, 0, 0]],  # 240° about [1-11]
+        [[ 0, 0,-1],[ 1, 0, 0],[ 0,-1, 0]],  # 120° about [11-1]
+        [[ 0, 1, 0],[ 0, 0,-1],[-1, 0, 0]],  # 240° about [11-1]
+        [[ 0, 1, 0],[ 1, 0, 0],[ 0, 0,-1]],  # 180° about [110]
+        [[ 0,-1, 0],[-1, 0, 0],[ 0, 0,-1]],  # 180° about [1-10]
+        [[ 0, 0, 1],[ 0,-1, 0],[ 1, 0, 0]],  # 180° about [101]
+        [[ 0, 0,-1],[ 0,-1, 0],[-1, 0, 0]],  # 180° about [10-1]
+        [[-1, 0, 0],[ 0, 0, 1],[ 0, 1, 0]],  # 180° about [011]
+        [[-1, 0, 0],[ 0, 0,-1],[ 0,-1, 0]],  # 180° about [01-1]
+    ], dtype=float)
+
+_CUBIC_SYMS = _cubic_symmetry_ops()
+
 def calculate_misorientation(R1, R2):
-    R_rel = np.array(R1) @ np.array(R2).T
-    trace = np.trace(R_rel)
-    val = np.clip((trace - 1.0) / 2.0, -1.0, 1.0)
-    theta_rad = np.arccos(val)
-    return float(np.degrees(theta_rad))
+    """
+    Computes the disorientation angle between two cubic crystal orientations.
+    Applies all 24 cubic symmetry operations to find the minimum misorientation
+    angle (disorientation), bounded by 62.8° for cubic crystals.
+    """
+    R1, R2 = np.array(R1), np.array(R2)
+    R_delta = R1 @ R2.T
+    min_angle = 180.0
+    for S in _CUBIC_SYMS:
+        R_equiv = S @ R_delta
+        trace = np.trace(R_equiv)
+        val = np.clip((trace - 1.0) / 2.0, -1.0, 1.0)
+        angle_deg = float(np.degrees(np.arccos(val)))
+        if angle_deg < min_angle:
+            min_angle = angle_deg
+    return min_angle
 
-def analyze_microstructure():
-    print("--- Microstructure & Feature Extraction with Taylor Factors & GB Energies ---")
-    
-    with open("data/grains_metadata.json", "r") as f:
-        grains_info = json.load(f)
-    num_grains = len(grains_info)
-
-    traj_path = os.path.join("simulations", "tensile.lammpstrj")
-    box_len, df_deformed = parse_lammpstrj(traj_path)
-
-    node_features = []
-    for g in grains_info:
-        g_id = g["grain_id"]
-        atoms_g = df_deformed[df_deformed["type"] == g_id]
-        
-        centroid = atoms_g[["x", "y", "z"]].mean().values
-        std_pos = atoms_g[["x", "y", "z"]].std().values
-        
-        R = np.array(g["rotation_matrix"])
-        taylor_M = calculate_fcc_taylor_factor(R)
-        
-        node_features.append({
-            "grain_id": g_id,
-            "atom_count": len(atoms_g),
-            "centroid_x": float(centroid[0]),
-            "centroid_y": float(centroid[1]),
-            "centroid_z": float(centroid[2]),
-            "euler_phi1": g["euler_angles_deg"][0],
-            "euler_theta": g["euler_angles_deg"][1],
-            "euler_phi2": g["euler_angles_deg"][2],
-            "taylor_factor": taylor_M,
-            "volume_est": float(np.prod(std_pos * 2.0)),
-            "grain_damage_index": float(np.mean(std_pos))
-        })
-
-    df_nodes = pd.DataFrame(node_features)
-
-    edge_features = []
-    cutoff_dist = 45.0
-
-    for i in range(num_grains):
-        for j in range(i + 1, num_grains):
-            g1 = grains_info[i]
-            g2 = grains_info[j]
-
-            c1 = np.array([df_nodes.loc[i, "centroid_x"], df_nodes.loc[i, "centroid_y"], df_nodes.loc[i, "centroid_z"]])
-            c2 = np.array([df_nodes.loc[j, "centroid_x"], df_nodes.loc[j, "centroid_y"], df_nodes.loc[j, "centroid_z"]])
-
-            delta = np.abs(c1 - c2)
-            delta = np.where(delta > 0.5 * np.array(box_len), np.array(box_len) - delta, delta)
-            dist = float(np.linalg.norm(delta))
-
-            if dist <= cutoff_dist:
-                misorient = calculate_misorientation(g1["rotation_matrix"], g2["rotation_matrix"])
-                gb_energy = calculate_read_shockley_gb_energy(misorient)
-                
-                # Edge features: distance, misorientation, GB energy
-                # NOTE: interface_damage_diff REMOVED — it is |D_i - D_j| derived from the target
-                edge_features.append({
-                    "source_grain": g1["grain_id"],
-                    "target_grain": g2["grain_id"],
-                    "distance_A": dist,
-                    "misorientation_deg": misorient,
-                    "gb_interface_energy_Jm2": gb_energy
-                })
-
-    df_edges = pd.DataFrame(edge_features)
-
-    nodes_csv = os.path.join("data", "graph_nodes.csv")
-    edges_csv = os.path.join("data", "graph_edges.csv")
-    df_nodes.to_csv(nodes_csv, index=False)
-    df_edges.to_csv(edges_csv, index=False)
-    print(f"Extracted node features (including Taylor Factor M) and edge features (including Read-Shockley GB Energy γ_GB). Saved to {nodes_csv} and {edges_csv}.")
 
 if __name__ == "__main__":
-    analyze_microstructure()
+    # Helper module — imported by generate_multisample_dataset.py
+    # Run generate_multisample_dataset.py for the full pipeline.
+    print("This module provides helper functions for microstructure analysis.")
+    print("Functions: calculate_fcc_taylor_factor, calculate_misorientation,")
+    print("           calculate_read_shockley_gb_energy, parse_lammpstrj")
