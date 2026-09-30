@@ -6,8 +6,17 @@ from scipy.spatial import KDTree
 
 def calculate_fcc_taylor_factor(R):
     """
-    Calculates the Taylor factor M for an FCC crystal orientation R under uniaxial loading along X.
-    Uses the 12 FCC {111}<110> slip systems.
+    Calculates a Sachs-type orientation plasticity factor M for an FCC crystal
+    orientation R under uniaxial loading along X (the [100] sample axis),
+    using the 12 FCC {111}<110> slip systems.
+
+    NOTE: Despite the historical function name, this is NOT the full-constraint
+    Taylor factor (a 5-system LP whose random-polycrystal mean is ~3.06 with
+    minimum 2.449). It computes the reciprocal of the maximum Schmid factor,
+    M = 1 / max_s |n_s . d| |b_s . d| — the Sachs uniform-stress lower-bound
+    estimate (random-polycrystal mean ~2.2). The function name and the returned
+    CSV column "taylor_factor" are kept for backward compatibility with the
+    dataset and GNN pipeline.
     """
     # 4 {111} plane normals
     normals = np.array([

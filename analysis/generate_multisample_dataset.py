@@ -45,7 +45,7 @@ def run_single_simulation_sample(sample_id, seed, num_grains):
     Full pipeline for one polycrystalline specimen:
       1. Generate Voronoi polycrystal LAMMPS data file
       2. Run LAMMPS MD (minimize + equilibrate + tensile)
-      3. Extract node features (Euler angles, Taylor factor, volume, damage index)
+      3. Extract node features (Euler angles, Sachs-type orientation factor ["taylor_factor" column], volume, damage index)
       4. Extract edge features (distance, misorientation, GB energy) — NO damage_diff
       5. Return results dict
     """
@@ -510,7 +510,7 @@ def main():
     print("==========================================")
     print(df_manifest)
     print(f"\nTotal Independent Samples  : {len(df_manifest)}")
-    print(f"Total Grain Nodes Extracted : {len(df_nodes)} (Includes Taylor Factor M)")
+    print(f"Total Grain Nodes Extracted : {len(df_nodes)} (Includes Sachs-type orientation factor M, stored in 'taylor_factor' column)")
     print(f"Total Grain Boundary Edges  : {len(df_edges)} (Includes Read-Shockley GB Energy gamma_GB)")
 
 

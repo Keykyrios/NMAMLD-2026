@@ -95,7 +95,8 @@ def build_pyg_graph(sample_id, df_nodes, df_edges, node_scaler_mean, node_scaler
             degree_count[v] += 1
 
     # Node Features (9 features):
-    #   6 Euler sin/cos + Taylor factor + atom_count + node_degree
+    #   6 Euler sin/cos + Sachs-type orientation factor ('taylor_factor' column:
+    #   reciprocal max-Schmid over 12 FCC {111}<110> slip systems) + atom_count + node_degree
     # The feature set consists purely of pre-loading geometric and crystallographic properties.
     p1 = np.radians(sample_nodes["euler_phi1"].values)
     th = np.radians(sample_nodes["euler_theta"].values)
